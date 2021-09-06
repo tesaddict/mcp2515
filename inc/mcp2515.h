@@ -28,6 +28,28 @@
 #define RXB0CTRL    0x60
 #define RXB1CTRL    0x70
 
+// Transmission Registers
+#define TXB0SIDH 0x31
+#define TXB0SIDL 0x32
+#define TXB0EID8 0x33
+#define TXB0EID0 0x34
+
+#define TXB0DLC  0x35
+#define RTR      0x06
+#define DLC3     0x03
+#define DLC2     0x02
+#define DLC1     0x01
+#define DLC0     0x00
+
+#define TXB0D0   0x36
+#define TXB0D1   0x37
+#define TXB0D2   0x38
+#define TXB0D3   0x39
+#define TXB0D4   0x3a
+#define TXB0D5   0x3b
+#define TXB0D6   0x3c
+#define TXB0D7   0x3d
+
 // Bit Positions
 
 // BFPCTRL
@@ -153,5 +175,7 @@ void    mcp2515_init(void);
 uint8_t mcp2515_read_register(uint8_t address);
 void    nco2515_write_register(uint8_t address, uint8_t value);
 uint8_t mcp2515_read_status(void);
+
+int8_t mcp2515_tx0_standard_transmit(uint16_t id, uint8_t *data);
 
 #endif
