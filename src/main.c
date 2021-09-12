@@ -3,7 +3,6 @@
 #include <string.h>
 #include <assert.h>
 #include "mcp2515.h"
-#include "definitions.h"
 #include "print.h"
 
 ISR (PCINT0_vect) {
@@ -42,10 +41,10 @@ int main(void) {
     can_frame.tx = TX0;
     can_frame.frame = STANDARD;
     usart_send("Sending Standard CAN frame message.\r\n");
-    mcp2515_transmit(&can_frame);
+    mcp2515_send(&can_frame);
     usart_send("Standard CAN frame message has been sent.\r\n");
     mcp2515_frame_t recv_frame;
-    mcp2515_receive(&recv_frame);
+    mcp2515_recv(&recv_frame);
     usart_send("Received CAN frame message.\r\n");
     recv_frame.data[5] = '\r';
     recv_frame.data[6] = '\n';

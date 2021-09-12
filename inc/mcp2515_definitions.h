@@ -1,6 +1,12 @@
 #ifndef _MCP2515_DEFINITIONS_H_
 #define _MCP2515_DEFINITIONS_H_
 
+// Useful macros
+#define UNSET_BIT(A, B) ((A) &= ~(1 << (B)))
+#define SET_BIT(A, B) ((A) |=  (1 << (B)))
+#define SS_LOW UNSET_BIT(PORTB, PINB2)
+#define SS_HIGH SET_BIT(PORTB, PINB2)
+
 // Commands
 #define CAN_RESET       0xc0
 #define CAN_READ        0x03
