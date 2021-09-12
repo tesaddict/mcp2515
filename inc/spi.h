@@ -2,7 +2,6 @@
 #define _SPI_H_
 
 #include <avr/io.h>
-#include "definitions.h"
 
 #define SPI_DDR DDRB
 #define SS      PINB2
