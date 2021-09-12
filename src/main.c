@@ -12,7 +12,6 @@ ISR (PCINT0_vect) {
 void enable_interrupts(void) {
     SET_BIT(DDRB,  PINB0);
     SET_BIT(PORTB, PINB0);
-    // Enable global interrupts.
     SREG |= (1 << 7);
     PCICR &= 0;
     PCICR  |= (1 << PCIE0);
@@ -38,7 +37,6 @@ int main(void) {
     can_frame.data[2] = 'l';
     can_frame.data[3] = 'l';
     can_frame.data[4] = 'o';
-    can_frame.tx = TX0;
     can_frame.frame = STANDARD;
     usart_send("Sending Standard CAN frame message.\r\n");
     mcp2515_send(&can_frame);
@@ -50,7 +48,7 @@ int main(void) {
     recv_frame.data[6] = '\n';
     recv_frame.data[7] = '\0';
     usart_send((char*)recv_frame.data);
-    while(1) {}
+    while(1);
     return 0;
 }
 

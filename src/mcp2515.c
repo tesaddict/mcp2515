@@ -2,8 +2,7 @@
 
 static void    spi_init(void);
 static uint8_t spi_write(const uint8_t data);
-// Private
-static uint8_t mcp2515_get_interrupt_val(const mcp2515_interrupts_t *it);
+static uint8_t mcp2515_get_caninte_val(const mcp2515_interrupts_t *it);
 static void    mcp2515_reset(void);
 static uint8_t mcp2515_read(const uint8_t address);
 static void    mcp2515_write(const uint8_t address, const uint8_t value);
@@ -15,7 +14,7 @@ static void    mcp2515_bit_modify(
 
 static void spi_init(void) {
 	DDRB = (1 << PINB2) | (1 << PINB3) | (1 << PINB5);
-    SPCR    = (1 << SPE) | (1 << MSTR) | (0 << SPR1) | (1 << SPR0);
+    SPCR = (1 << SPE) | (1 << MSTR) | (0 << SPR1) | (1 << SPR0);
 }
 
 static uint8_t spi_write(const uint8_t data) {
@@ -24,7 +23,7 @@ static uint8_t spi_write(const uint8_t data) {
     return SPDR;
 }
 
-static uint8_t mcp2515_get_interrupt_val(const mcp2515_interrupts_t *it) {
+static uint8_t mcp2515_get_caninte_val(const mcp2515_interrupts_t *it) {
     uint8_t ret = 0;
     ret |= it->MER_RE ? (1 << MERRE) : 0;
     ret |= it->WAK_IE ? (1 << WAKIE) : 0;
@@ -38,9 +37,9 @@ static uint8_t mcp2515_get_interrupt_val(const mcp2515_interrupts_t *it) {
 }
 
 static void mcp2515_reset(void) {
-	SS_LOW;
+    SS_LOW;
     spi_write(CAN_RESET);
-	SS_HIGH;
+    SS_HIGH;
 }
 
 static uint8_t mcp2515_read(uint8_t address) {
@@ -101,60 +100,56 @@ void mcp2515_init(const mcp2515_config_t *config) {
             CNF1, (1 << SJW0) | (1 << BRP0) | (1 << BRP1) | (1 << BRP2));
 	mcp2515_write(CNF2, (1 << BTLMODE) | (1 << PHSEG11));
 	mcp2515_write(CNF3, (1 << PHSEG21));
-    mcp2515_write(CANINTE, mcp2515_get_interrupt_val(&config->ie));
+    mcp2515_write(CANINTE, mcp2515_get_caninte_val(&config->ie));
     mcp2515_write(CANCTRL, (config->mode << 5));
     mcp2515_write(RXB0CTRL, (1 << 6) | (1 << 5));
     _delay_us(10);
 }
 
 void mcp2515_send(const mcp2515_frame_t *tr) {
-    uint8_t tx_buf_offset = 0x10 * tr->tx;
     SS_LOW;
     spi_write(CAN_WRITE);
-    spi_write(TXB0CTRL + tx_buf_offset);
+    spi_write(TXB0CTRL);
     spi_write(0x0);
-    if (tr->frame == STANDARD) {
+    /* Will send any enum value as STANDARD. */
+    if (tr->frame != EXTENDED) {
         uint8_t id_h = (tr->id & 0x07ff) >> 3;
         uint8_t id_l = (tr->id & 0x0007);
         spi_write(id_h);
         spi_write((id_l << 5));
         spi_write(0x0);
         spi_write(0x0);
-    // TODO: Implement EXTENDED CAN FRAMES
+    /* TODO: Implement EXTENDED CAN FRAMES */
     } else if (tr->frame == EXTENDED) {
         uint8_t id_h = 0;
         uint8_t id_m = 0;
         uint8_t id_l = 0;
-        // Set EXIDE to 1 and set EID17 and EID16.
+        /* Set EXIDE to 1 and set EID17 and EID16. */
         spi_write(0x0);
         spi_write((1 << 3) & id_h);
         spi_write(id_m);
         spi_write(id_l);
-    } else {
-        SS_HIGH;
-        return;
-    }
+    } 
     spi_write(tr->data_sz & 0x0f);
     for (int i = 0; i < 8; ++i) {
         spi_write(tr->data[i]);
     }
     SS_HIGH;
     mcp2515_write(
-            TXB0CTRL + tx_buf_offset, 
+            TXB0CTRL,
             (1 << TXREQ) | (1 << TXP1) | (1 << TXP0));
 }
 
 int8_t mcp2515_recv(mcp2515_frame_t *frame) {
-    while(!(mcp2515_read(CANINTF) & (1 << RX0IF)));
+    if (!(mcp2515_read(CANINTF) & (1 << RX0IF))) return -1;
     uint8_t sidl = mcp2515_read(RXB0SIDL);
     if ((sidl & (1 << 3)) == 0) {
-        // Standard frame.
         uint16_t id_h = mcp2515_read(RXB0SIDH);
         frame->id = id_h << 3;
         frame->id |= (sidl & 0xe0) >> 5;
         frame->frame = STANDARD;
     } else {
-        // TODO: Implement extended.
+        /* TODO: Implement extended. */
         frame->frame = EXTENDED;
     }
     uint8_t sz = mcp2515_read(RXB0DLC) & 0x0f;

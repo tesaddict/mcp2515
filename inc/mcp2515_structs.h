@@ -33,17 +33,6 @@ typedef struct {
 } mcp2515_config_t;
 
 typedef enum {
-    TX0 = 0,
-    TX1,
-    TX2
-} TX_BUFFER;
-
-typedef enum {
-    RX0 = 0,
-    RX1
-} RX_BUFFER;
-
-typedef enum {
     STANDARD = 0,
     EXTENDED = 1
 } CAN_FRAME;
@@ -52,8 +41,6 @@ typedef struct {
     uint32_t id;
     uint8_t data_sz;
     uint8_t data[8];
-    TX_BUFFER tx;
     CAN_FRAME frame;
 } mcp2515_frame_t;
-
 #endif
