@@ -1,9 +1,13 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
-#include <string.h>
-#include <assert.h>
+
 #include "mcp2515.h"
-#include "print.h"
+#include "logger.h"
+
+#define MYUBRR F_CPU/16/BAUD-1
+
+void usart_init(void);
+void usart_send(const char *data);
 
 ISR (PCINT0_vect) {
     usart_send("ERROR\r\n");
@@ -20,14 +24,14 @@ void enable_interrupts(void) {
 }
 
 int main(void) {
-    usart_init();
+    logger_t *logger = logger_alloc(&usart_init, &usart_send, DEBUG);
     enable_interrupts();
-    usart_send("Initializing MCP2515.\r\n");
+    logger_log(logger, INFO, "Initializing MCP2515.\r\n");
     mcp2515_config_t config;
     mcp2515_config_init(&config, KBPS_125, LOOPBACK);
     config.ie.MER_RE = true;
     mcp2515_init(&config);
-    usart_send("Initialization complete.\r\n"); 
+    logger_log(logger, INFO, "Initialization complete.\r\n"); 
 
     mcp2515_frame_t can_frame;
     can_frame.id = 42;
@@ -38,18 +42,33 @@ int main(void) {
     can_frame.data[3] = 'l';
     can_frame.data[4] = 'o';
     can_frame.frame = STANDARD;
-    usart_send("Sending Standard CAN frame message.\r\n");
+    logger_log(logger, INFO, "Sending Standard CAN frame message.\r\n");
     mcp2515_send(&can_frame);
-    usart_send("Standard CAN frame message has been sent.\r\n");
+    logger_log(logger, INFO, "Standard CAN frame message has been sent.\r\n");
     mcp2515_frame_t recv_frame;
     mcp2515_recv(&recv_frame);
-    usart_send("Received CAN frame message.\r\n");
+    logger_log(logger, INFO, "Received CAN frame message.\r\n");
     recv_frame.data[5] = '\r';
     recv_frame.data[6] = '\n';
     recv_frame.data[7] = '\0';
-    usart_send((char*)recv_frame.data);
+    logger_log(logger, INFO, (char*)recv_frame.data);
     while(1);
     return 0;
 }
 
+void usart_init(void) {
+    const unsigned int ubrr = MYUBRR;
+    UBRR0H = (unsigned char)(ubrr>>8);
+    UBRR0L = (unsigned char)(ubrr);
+    UCSR0C = 0x06;
+    UCSR0B = (1<<TXEN0);
+}
 
+void usart_send(const char *data) {
+    int i = 0;
+    while(data[i] != 0) {
+        while (!(UCSR0A & (1<<UDRE0)));
+        UDR0 = data[i];
+        i++;
+    }
+}

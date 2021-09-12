@@ -47,7 +47,7 @@ include_directories(${INC_PATH})
 add_executable(${PROJECT_NAME} 
     src/main.c
     src/mcp2515.c
-    src/print.c)
+    src/logger.c)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME ${PROJECT_NAME}.elf)
 
