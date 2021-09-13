@@ -1,6 +1,8 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
+#include <string.h>
+
 #include "mcp2515.h"
 #include "logger.h"
 
@@ -10,7 +12,6 @@ void usart_init(void);
 void usart_send(const char *data);
 
 ISR (PCINT0_vect) {
-    usart_send("ERROR\r\n");
 }
 
 void enable_interrupts(void) {
@@ -26,33 +27,48 @@ void enable_interrupts(void) {
 int main(void) {
     logger_t *logger = logger_alloc(&usart_init, &usart_send, DEBUG);
     enable_interrupts();
-    logger_log(logger, INFO, "Initializing MCP2515.\r\n");
+    logger_log(logger, INFO, "TEST: Initializing MCP2515.\r\n");
     mcp2515_config_t config;
     mcp2515_config_init(&config, KBPS_125, LOOPBACK);
-    config.ie.MER_RE = true;
     mcp2515_init(&config);
-    logger_log(logger, INFO, "Initialization complete.\r\n"); 
-
-    mcp2515_frame_t can_frame;
-    can_frame.id = 42;
-    can_frame.data_sz = 5;
-    can_frame.data[0] = 'H';
-    can_frame.data[1] = 'e';
-    can_frame.data[2] = 'l';
-    can_frame.data[3] = 'l';
-    can_frame.data[4] = 'o';
-    can_frame.frame = STANDARD;
-    logger_log(logger, INFO, "Sending Standard CAN frame message.\r\n");
-    mcp2515_send(&can_frame);
-    logger_log(logger, INFO, "Standard CAN frame message has been sent.\r\n");
+    logger_log(logger, INFO, "PASSED: Initialization complete.\r\n"); 
+    
+    mcp2515_frame_t send_frame;
+    send_frame.id = 42;
+    send_frame.data_sz = 5;
+    send_frame.data[0] = 'H';
+    send_frame.data[1] = 'e';
+    send_frame.data[2] = 'l';
+    send_frame.data[3] = 'l';
+    send_frame.data[4] = 'o';
+    send_frame.data[5] = '\0';
+    send_frame.frame = STANDARD;
+    logger_log(logger, INFO, "TEST: Sending Standard CAN frame message.\r\n");
+    mcp2515_send(&send_frame);
+    logger_log(logger, INFO, "PASSED: Standard CAN frame message has been sent.\r\n");
     mcp2515_frame_t recv_frame;
-    mcp2515_recv(&recv_frame);
-    logger_log(logger, INFO, "Received CAN frame message.\r\n");
-    recv_frame.data[5] = '\r';
-    recv_frame.data[6] = '\n';
-    recv_frame.data[7] = '\0';
-    logger_log(logger, INFO, (char*)recv_frame.data);
-    while(1);
+    logger_log(logger, INFO, "TEST: Receiving CAN frame message.\r\n");
+    int8_t ret = mcp2515_recv(&recv_frame);
+    if (ret == 0) {
+        logger_log(logger, INFO, "PASSED: Received CAN frame message.\r\n");
+    } else {
+        logger_log(logger, INFO, "FAILED: No CAN frame message has been received.\r\n");
+        return -1;
+    }
+    recv_frame.data[5] = '\0';
+    logger_log(logger, INFO, "TEST: Checking if sent data matches received data.\r\n");
+    if (strcmp((char*)send_frame.data, (char*)recv_frame.data) == 0) {
+        logger_log(logger, INFO, "PASSED: Sent data matches received data.\r\n");
+    } else {
+        logger_log(logger, INFO, "FAILED: Sent data does not match received data.\r\n");
+        return -1;
+    }
+    logger_log(logger, INFO, "TEST: Checking if sent id matches received id.\r\n");
+    if (recv_frame.id == send_frame.id) {
+        logger_log(logger, INFO, "PASSED: Sent id matches received id.\r\n");
+    } else {
+        logger_log(logger, INFO, "FAILED: Sent id does not match received id.\r\n");
+    }
     return 0;
 }
 
