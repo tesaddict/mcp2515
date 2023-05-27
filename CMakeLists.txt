@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8)
 
 set(PROG_TYPE arduino)
-set(USB_PORT /dev/ttyACM0)
+set(USB_PORT /dev/tty.usbmodem3101)
 set(MCU atmega328p)
 set(F_CPU 16000000)
 set(BAUD 9600)
