@@ -1,82 +1,53 @@
 #include "mcp2515.h"
+#include <stdint.h>
 
-static void spi_init(void);
-static uint8_t spi_write(const uint8_t data);
-static uint8_t mcp2515_get_caninte_val(const mcp2515_interrupts_t *it);
-static void mcp2515_reset(void);
-static uint8_t mcp2515_read(const uint8_t address);
-static void mcp2515_write(const uint8_t address, const uint8_t value);
-static uint8_t mcp2515_read_status(void);
-static void mcp2515_bit_modify(const uint8_t address, const uint8_t mask, const uint8_t data);
-
-static void spi_init(void) {
-	DDRB = (1 << PINB2) | (1 << PINB3) | (1 << PINB5);
-  SPCR = (1 << SPE) | (1 << MSTR) | (0 << SPR1) | (1 << SPR0);
-}
-
-static uint8_t spi_write(const uint8_t data) {
-  SPDR = data;
-  while(!(SPSR & (1 << SPIF)));
-  return SPDR;
-}
-
-static uint8_t mcp2515_get_caninte_val(const mcp2515_interrupts_t *it) {
-  uint8_t ret = 0;
-  ret |= it->MER_RE ? (1 << MERRE) : 0;
-  ret |= it->WAK_IE ? (1 << WAKIE) : 0;
-  ret |= it->ERR_IE ? (1 << ERRIE) : 0;
-  ret |= it->TX2_IE ? (1 << TX2IE) : 0;
-  ret |= it->TX1_IE ? (1 << TX1IE) : 0;
-  ret |= it->TX0_IE ? (1 << TX0IE) : 0;
-  ret |= it->RX1_IE ? (1 << RX1IE) : 0;
-  ret |= it->RX0_IE ? (1 << RX0IE) : 0;
-  return ret;
-}
+static mcp2515_config_t mcp2515;
 
 static void mcp2515_reset(void) {
-  SS_LOW;
-  spi_write(CAN_RESET);
-  SS_HIGH;
+  #define MCP2515_RESET_SZ 1U
+  static const uint8_t cmd[MCP2515_RESET_SZ] = { CAN_RESET };
+  mcp2515.cb.low();
+  mcp2515.cb.write(cmd, MCP2515_RESET_SZ);
+  mcp2515.cb.high();
 }
 
-static uint8_t mcp2515_read(uint8_t address) {
-	SS_LOW;
-  spi_write(CAN_READ);
-  spi_write(address);
-  uint8_t ret = spi_write(0xff);
-	SS_HIGH;
-  return ret;
+static uint8_t mcp2515_read(const uint8_t address) {
+  #define MCP2515_READ_SZ 2U
+  const uint8_t cmd[MCP2515_READ_SZ] = { CAN_READ, address };
+  uint8_t data;
+  mcp2515.cb.low();
+  mcp2515.cb.write(cmd, MCP2515_READ_SZ);
+  mcp2515.cb.read(&data, 1U);
+  mcp2515.cb.high();
+  return data;
+}
+
+static void mcp2515_read_continguous(uint8_t command, uint8_t *out, const uint8_t size) {
+  #define MCP2515_READ_CONTIGUOUS_SZ 1U
+  mcp2515.cb.low();
+  mcp2515.cb.write(&command, MCP2515_READ_CONTIGUOUS_SZ);
+  mcp2515.cb.read(out, size);
+  mcp2515.cb.high();
 }
 
 static void mcp2515_write(const uint8_t address, const uint8_t value) {
-	SS_LOW;
-  spi_write(CAN_WRITE);
-  spi_write(address);
-  spi_write(value);
-	SS_HIGH;
-}
-
-static uint8_t mcp2515_read_status() {
-	SS_LOW;
-  spi_write(CAN_READ_STATUS);
-  uint8_t ret = spi_write(0xff);
-	SS_HIGH;
-  return ret;
+  #define MCP2515_WRITE_SZ 3U
+  const uint8_t cmd[MCP2515_WRITE_SZ] = { CAN_WRITE, address, value };
+  mcp2515.cb.low();
+  mcp2515.cb.write(cmd, MCP2515_WRITE_SZ);
+  mcp2515.cb.high();
 }
 
 static void mcp2515_bit_modify(const uint8_t address, const uint8_t mask, const uint8_t data) {
-  SS_LOW;
-  spi_write(CAN_BIT_MODIFY);
-  spi_write(address);
-  spi_write(mask);
-  spi_write(data);
-  SS_HIGH;
+  #define MCP2515_BIT_MODIFY_SZ 4U
+  const uint8_t cmd[MCP2515_BIT_MODIFY_SZ] = { CAN_BIT_MODIFY, address, mask, data };
+  mcp2515.cb.low();
+  mcp2515.cb.write(cmd, MCP2515_BIT_MODIFY_SZ);
+  mcp2515.cb.high();
 }
 
-void mcp2515_init(const mcp2515_config_t *config) {
-  spi_init();
+void mcp2515_init() {
   mcp2515_reset();
-  _delay_us(10);
   /* TODO: Create a function that determines CNF1, CNF2 and CNF3 given a desired bit rate.
    * Assuming F_CPU = 16000000
    * SyncSeg = 1 TQ
@@ -90,76 +61,59 @@ void mcp2515_init(const mcp2515_config_t *config) {
    * BRP = ((TQ * F_CPU) / 2) - 1 = 7
   */
   mcp2515_write(CNF1, (1 << SJW0) | (1 << BRP0) | (1 << BRP1) | (1 << BRP2));
-	mcp2515_write(CNF2, (1 << BTLMODE) | (1 << PHSEG11));
-	mcp2515_write(CNF3, (1 << PHSEG21));
-  mcp2515_write(CANINTE, mcp2515_get_caninte_val(&config->ie));
-  mcp2515_write(CANCTRL, (config->mode << 5));
+  mcp2515_write(CNF2, (1 << BTLMODE) | (1 << PHSEG11));
+  mcp2515_write(CNF3, (1 << PHSEG21));
+  mcp2515_write(CANINTE, 0x00);
+  mcp2515_write(CANCTRL, (mcp2515.mode << 5));
   mcp2515_write(RXB0CTRL, (1 << 6) | (1 << 5));
-  _delay_us(10);
 }
 
 void mcp2515_send(const mcp2515_frame_t *tr) {
-  SS_LOW;
-  spi_write(CAN_WRITE);
-  spi_write(TXB0CTRL);
-  spi_write(0x0);
-  /* Will send any enum value as STANDARD. */
-  if (tr->frame != EXTENDED) {
-    uint8_t id_h = (tr->id & 0x07ff) >> 3;
-    uint8_t id_l = (tr->id & 0x0007);
-    spi_write(id_h);
-    spi_write((id_l << 5));
-    spi_write(0x0);
-    spi_write(0x0);
-  /* TODO: Implement EXTENDED CAN FRAMES */
-  } else if (tr->frame == EXTENDED) {
-    uint8_t id_h = 0;
-    uint8_t id_m = 0;
-    uint8_t id_l = 0;
-    /* Set EXIDE to 1 and set EID17 and EID16. */
-    spi_write(0x0);
-    spi_write((1 << 3) & id_h);
-    spi_write(id_m);
-    spi_write(id_l);
-  } 
-  spi_write(tr->data_sz & 0x0f);
-  for (int i = 0; i < 8; ++i) {
-    spi_write(tr->data[i]);
-  }
-  SS_HIGH;
+  #define MCP2515_SEND_SZ 16U
+  const uint8_t cmd[MCP2515_SEND_SZ] = {
+   CAN_WRITE,
+   TXB0CTRL,
+   0x00U,
+   (tr->id & 0x07ff) >> 3,
+   (tr->id & 0x0007) << 5,
+   0x00U,
+   0x00U,
+   tr->data_size & 0x0FU,
+   tr->data[0], tr->data[1], tr->data[2], tr->data[3],
+   tr->data[4], tr->data[5], tr->data[6], tr->data[7],
+  };
+  mcp2515.cb.write(cmd, MCP2515_SEND_SZ);
   mcp2515_write(TXB0CTRL, (1 << TXREQ) | (1 << TXP1) | (1 << TXP0));
 }
 
+#define MCP2515_SIDH_INDEX    0U
+#define MCP2515_SIDL_INDEX    1U
+#define MCP2515_EID8_INDEX    2U
+#define MCP2515_EID0_INDEX    3U
+#define MCP2515_DLC_INDEX     4U
+#define MCP2515_DATA_INDEX    5U
+#define MCP2515_RX_BUFFER_SZ 13U
 int8_t mcp2515_recv(mcp2515_frame_t *frame) {
   if (!(mcp2515_read(CANINTF) & (1 << RX0IF))) return -1;
-  uint8_t sidl = mcp2515_read(RXB0SIDL);
-  if ((sidl & (1 << 3)) == 0) {
-    uint16_t id_h = mcp2515_read(RXB0SIDH);
-    frame->id = id_h << 3;
-    frame->id |= (sidl & 0xe0) >> 5;
-    frame->frame = STANDARD;
+  uint8_t frame_data[MCP2515_RX_BUFFER_SZ];
+  mcp2515_read_continguous(CAN_READ_RX_BUFFER_RXB0SIDH, frame_data, MCP2515_RX_BUFFER_SZ);
+  if ((frame_data[MCP2515_SIDL_INDEX] & 0x08U) != 0U) {
+    frame->type = EXTENDED;
+
   } else {
-    /* TODO: Implement extended. */
-    frame->frame = EXTENDED;
+    frame->type = STANDARD;
+    frame->id = (frame_data[MCP2515_SIDH_INDEX] << 3) | (frame_data[MCP2515_SIDL_INDEX] >> 5);
   }
-  uint8_t sz = mcp2515_read(RXB0DLC) & 0x0f;
-  frame->data_sz = sz;
-  for (int i = 0; i < sz; ++i) {
-    frame->data[i] = mcp2515_read(RXB0D0 + i);
+  frame->data_size = frame_data[MCP2515_DLC_INDEX] & 0x0FU;
+  for (uint8_t i = 0; i < frame->data_size; ++i) {
+    frame->data[i] = frame_data[MCP2515_DATA_INDEX + i];
   }
-  mcp2515_bit_modify(CANINTF, (1 << RX0IF), 0);
   return 0;
 }
 
-void mcp2515_config_init(mcp2515_config_t *config, const CAN_SPEED speed, const CAN_MODE  mode) {
-  config->speed = speed;
-  config->mode  = mode;
-  config->ie.MER_RE = false;
-  config->ie.WAK_IE = false;
-  config->ie.ERR_IE = false;
-  config->ie.TX2_IE = false;
-  config->ie.TX1_IE = false;
-  config->ie.TX0_IE = false;
-  config->ie.RX1_IE = false;
-  config->ie.RX0_IE = false;
+void mcp2515_config_init(const CAN_SPEED speed, const CAN_MODE  mode,
+    mcp2515_spi_callbacks_t cb) {
+  mcp2515.speed = speed;
+  mcp2515.mode  = mode;
+  mcp2515.cb = cb;
 }

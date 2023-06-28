@@ -4,15 +4,13 @@
 #include <string.h>
 
 #include "mcp2515.h"
+#include "atmega328p_spi.h"
 #include "logger.h"
 
 #define MYUBRR F_CPU/16/BAUD-1
 
 void usart_init(void);
 void usart_send(const char *data);
-
-ISR (PCINT0_vect) {
-}
 
 void enable_interrupts(void) {
   SET_BIT(DDRB,  PINB0);
@@ -27,22 +25,24 @@ void enable_interrupts(void) {
 int main(void) {
   logger_init(&usart_init, &usart_send, DEBUG);
   enable_interrupts();
+  atmega328p_spi_init();
   logger(INFO, "TEST: Initializing MCP2515.\r\n");
-  mcp2515_config_t config;
-  mcp2515_config_init(&config, KBPS_125, LOOPBACK);
-  mcp2515_init(&config);
-  logger(INFO, "PASSED: Initialization complete.\r\n"); 
-    
+  mcp2515_config_init(KBPS_125, LOOPBACK,
+      (mcp2515_spi_callbacks_t){ &atmega328p_spi_write, &atmega328p_spi_read,
+        &atmega328p_spi_cs_low, &atmega328p_spi_cs_high });
+  mcp2515_init();
+  logger(INFO, "PASSED: Initialization complete.\r\n");
+
   mcp2515_frame_t send_frame;
   send_frame.id = 42;
-  send_frame.data_sz = 5;
+  send_frame.data_size = 5;
   send_frame.data[0] = 'H';
   send_frame.data[1] = 'e';
   send_frame.data[2] = 'l';
   send_frame.data[3] = 'l';
   send_frame.data[4] = 'o';
   send_frame.data[5] = '\0';
-  send_frame.frame = STANDARD;
+  send_frame.type = STANDARD;
   logger(INFO, "TEST: Sending Standard CAN frame message.\r\n");
   mcp2515_send(&send_frame);
   logger(INFO, "PASSED: Standard CAN frame message has been sent.\r\n");
@@ -61,7 +61,6 @@ int main(void) {
     logger(INFO, "PASSED: Sent data matches received data.\r\n");
   } else {
     logger(INFO, "FAILED: Sent data does not match received data.\r\n");
-    return -1;
   }
   logger(INFO, "TEST: Checking if sent id matches received id.\r\n");
   if (recv_frame.id == send_frame.id) {

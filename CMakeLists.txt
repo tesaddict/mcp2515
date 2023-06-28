@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8)
 
 set(PROG_TYPE arduino)
-set(USB_PORT /dev/tty.usbmodem3101)
+set(USB_PORT /dev/ttyACM0)
 set(MCU atmega328p)
 set(F_CPU 16000000)
 set(BAUD 9600)
@@ -28,7 +28,7 @@ set(INC_PATH  ${BASE_PATH}/inc)
 
 # Compiler flags
 set(CSTANDARD "-std=gnu99")
-set(CDEBUG    "-gstabs -g -ggdb")
+set(CDEBUG    "-g -ggdb")
 set(CWARN     "-Wall -Wstrict-prototypes -Wl,--gc-sections -Wl,--relax")
 set(CTUNING   "-funsigned-char -funsigned-bitfields -fpack-struct -fshort-enums -ffunction-sections -fdata-sections")
 set(COPT      "-Os -lm -lprintf_flt")
@@ -42,12 +42,17 @@ set(CMAKE_C_FLAGS   "${CFLAGS}")
 set(CMAKE_CXX_FLAGS "${CXXFLAGS}")
 set(CMAKE_ASM_FLAGS   "${CFLAGS}")
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
+
 include_directories(${INC_PATH})
 
-add_executable(${PROJECT_NAME} 
+add_executable(${PROJECT_NAME}
     src/main.c
     src/mcp2515.c
-    src/logger.c)
+    src/logger.c
+    src/atmega328p_spi.c)
+
+set(CMAKE_C_COMPILE_OBJECT "${CMAKE_C_COMPILE_OBJECT} -Wa,-alh=<OBJECT>.lst")
 
 set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME ${PROJECT_NAME}.elf)
 
