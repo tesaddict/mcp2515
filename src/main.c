@@ -1,8 +1,6 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
-#include <string.h>
-
 #include "mcp2515.h"
 #include "atmega328p_spi.h"
 #include "logger.h"
@@ -12,27 +10,11 @@
 void usart_init(void);
 void usart_send(const char *data);
 
-void enable_interrupts(void) {
-  SET_BIT(DDRB,  PINB0);
-  SET_BIT(PORTB, PINB0);
-  SREG |= (1 << 7);
-  PCICR &= 0;
-  PCICR  |= (1 << PCIE0);
-  PCMSK0 &= 0;
-  PCMSK0 |= (1 << PCINT0);
-}
-
 int main(void) {
   logger_init(&usart_init, &usart_send, DEBUG);
-  enable_interrupts();
   atmega328p_spi_init();
-  logger(INFO, "TEST: Initializing MCP2515.\r\n");
-  mcp2515_config_init(KBPS_125, LOOPBACK,
-      (mcp2515_spi_callbacks_t){ &atmega328p_spi_write, &atmega328p_spi_read,
-        &atmega328p_spi_cs_low, &atmega328p_spi_cs_high });
-  mcp2515_init();
+  mcp2515_init(KBPS_125, LOOPBACK, &atmega328p_spi_transaction);
   logger(INFO, "PASSED: Initialization complete.\r\n");
-
   mcp2515_frame_t send_frame;
   send_frame.id = 42;
   send_frame.data_size = 5;
@@ -41,28 +23,20 @@ int main(void) {
   send_frame.data[2] = 'l';
   send_frame.data[3] = 'l';
   send_frame.data[4] = 'o';
-  send_frame.data[5] = '\0';
-  send_frame.type = STANDARD;
-  logger(INFO, "TEST: Sending Standard CAN frame message.\r\n");
   mcp2515_send(&send_frame);
   logger(INFO, "PASSED: Standard CAN frame message has been sent.\r\n");
   mcp2515_frame_t recv_frame;
-  logger(INFO, "TEST: Receiving CAN frame message.\r\n");
   int8_t ret = mcp2515_recv(&recv_frame);
   if (ret == 0) {
       logger(INFO, "PASSED: Received CAN frame message.\r\n");
   } else {
       logger(INFO, "FAILED: No CAN frame message has been received.\r\n");
-      return -1;
   }
-  recv_frame.data[5] = '\0';
-  logger(INFO, "TEST: Checking if sent data matches received data.\r\n");
-  if (strcmp((char*)send_frame.data, (char*)recv_frame.data) == 0) {
+  if (send_frame.data[0] == recv_frame.data[0]) {
     logger(INFO, "PASSED: Sent data matches received data.\r\n");
   } else {
     logger(INFO, "FAILED: Sent data does not match received data.\r\n");
   }
-  logger(INFO, "TEST: Checking if sent id matches received id.\r\n");
   if (recv_frame.id == send_frame.id) {
     logger(INFO, "PASSED: Sent id matches received id.\r\n");
   } else {

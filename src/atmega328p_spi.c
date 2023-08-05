@@ -5,25 +5,12 @@ void atmega328p_spi_init(void) {
   SPCR = (1 << SPE) | (1 << MSTR) | (0 << SPR1) | (1 << SPR0);
 }
 
-void atmega328p_spi_write(const uint8_t *in, const uint8_t size) {
-  for (uint8_t idx = 0; idx < size; ++idx) {
-    SPDR = in[idx];
-    while(!(SPSR & (1 << SPIF)));
-  }
-}
-
-void atmega328p_spi_read(uint8_t *out, const uint8_t size) {
-  for (uint8_t idx = 0; idx < size; ++idx) {
-    SPDR = 0xFFU;
-    while(!(SPSR & (1 << SPIF)));
-    out[idx] = SPDR;
-  }
-}
-
-void atmega328p_spi_cs_low(void) {
+void atmega328p_spi_transaction(uint8_t *buffer, const uint8_t size) {
   SS_LOW;
-}
-
-void atmega328p_spi_cs_high(void) {
+  for (uint8_t idx = 0; idx < size; ++idx) {
+    SPDR = buffer[idx];
+    while(!(SPSR & (1 << SPIF)));
+    buffer[idx] = SPDR;
+  }
   SS_HIGH;
 }

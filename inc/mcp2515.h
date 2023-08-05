@@ -15,41 +15,25 @@ typedef enum {
   LOOPBACK = 2
 } CAN_MODE;
 
-typedef void (*mcp2515_spi_write) (const uint8_t*, const uint8_t);
-typedef void (*mcp2515_spi_read) (uint8_t*, const uint8_t);
-typedef void (*mcp2515_spi_chip_select) (void);
-
-typedef struct {
-  mcp2515_spi_write write;
-  mcp2515_spi_read  read;
-  mcp2515_spi_chip_select low;
-  mcp2515_spi_chip_select high;
-} mcp2515_spi_callbacks_t;
+typedef void (*mcp2515_spi_transaction_t) (uint8_t*, const uint8_t);
 
 typedef struct {
   CAN_SPEED speed;
   CAN_MODE  mode;
   uint8_t   interrupts;
-  mcp2515_spi_callbacks_t cb;
 } mcp2515_config_t;
-
-typedef enum {
-  STANDARD = 0,
-  EXTENDED = 1
-} CAN_FRAME;
 
 typedef struct {
   uint32_t id;
   uint8_t data_size;
   uint8_t data[8];
-  CAN_FRAME type;
 } mcp2515_frame_t;
 
-void   mcp2515_init(void);
+void   mcp2515_init(const CAN_SPEED speed, 
+                    const CAN_MODE mode, 
+                    mcp2515_spi_transaction_t tr);
 void   mcp2515_send(const mcp2515_frame_t *tr);
 int8_t mcp2515_recv(mcp2515_frame_t *frame);
-void   mcp2515_config_init(const CAN_SPEED speed, const CAN_MODE  mode,
-    mcp2515_spi_callbacks_t callbacks);
 
 // Commands
 #define CAN_RESET       0xC0U

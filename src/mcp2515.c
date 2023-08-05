@@ -2,51 +2,34 @@
 #include <stdint.h>
 
 static mcp2515_config_t mcp2515;
+static mcp2515_spi_transaction_t transact;
 
 static void mcp2515_reset(void) {
   #define MCP2515_RESET_SZ 1U
-  static const uint8_t cmd[MCP2515_RESET_SZ] = { CAN_RESET };
-  mcp2515.cb.low();
-  mcp2515.cb.write(cmd, MCP2515_RESET_SZ);
-  mcp2515.cb.high();
-}
-
-static uint8_t mcp2515_read(const uint8_t address) {
-  #define MCP2515_READ_SZ 2U
-  const uint8_t cmd[MCP2515_READ_SZ] = { CAN_READ, address };
-  uint8_t data;
-  mcp2515.cb.low();
-  mcp2515.cb.write(cmd, MCP2515_READ_SZ);
-  mcp2515.cb.read(&data, 1U);
-  mcp2515.cb.high();
-  return data;
-}
-
-static void mcp2515_read_continguous(uint8_t command, uint8_t *out, const uint8_t size) {
-  #define MCP2515_READ_CONTIGUOUS_SZ 1U
-  mcp2515.cb.low();
-  mcp2515.cb.write(&command, MCP2515_READ_CONTIGUOUS_SZ);
-  mcp2515.cb.read(out, size);
-  mcp2515.cb.high();
+  uint8_t cmd[MCP2515_RESET_SZ] = { CAN_RESET };
+  transact(cmd, MCP2515_RESET_SZ);
 }
 
 static void mcp2515_write(const uint8_t address, const uint8_t value) {
   #define MCP2515_WRITE_SZ 3U
-  const uint8_t cmd[MCP2515_WRITE_SZ] = { CAN_WRITE, address, value };
-  mcp2515.cb.low();
-  mcp2515.cb.write(cmd, MCP2515_WRITE_SZ);
-  mcp2515.cb.high();
+  uint8_t cmd[MCP2515_WRITE_SZ] = { CAN_WRITE, address, value };
+  transact(cmd, MCP2515_WRITE_SZ);
 }
 
-static void mcp2515_bit_modify(const uint8_t address, const uint8_t mask, const uint8_t data) {
-  #define MCP2515_BIT_MODIFY_SZ 4U
-  const uint8_t cmd[MCP2515_BIT_MODIFY_SZ] = { CAN_BIT_MODIFY, address, mask, data };
-  mcp2515.cb.low();
-  mcp2515.cb.write(cmd, MCP2515_BIT_MODIFY_SZ);
-  mcp2515.cb.high();
+static uint8_t mcp2515_read(const uint8_t address) {
+  #define MCP2515_READ_SZ 3U
+  uint8_t cmd[MCP2515_READ_SZ] = { CAN_READ, address, 0xFF };
+  transact(cmd, MCP2515_READ_SZ);
+  return cmd[2];
 }
 
-void mcp2515_init() {
+void mcp2515_init(const CAN_SPEED speed, 
+                  const CAN_MODE mode, 
+                  mcp2515_spi_transaction_t tr) 
+{
+  mcp2515.speed = speed;
+  mcp2515.mode  = mode;
+  transact = tr;
   mcp2515_reset();
   /* TODO: Create a function that determines CNF1, CNF2 and CNF3 given a desired bit rate.
    * Assuming F_CPU = 16000000
@@ -70,7 +53,7 @@ void mcp2515_init() {
 
 void mcp2515_send(const mcp2515_frame_t *tr) {
   #define MCP2515_SEND_SZ 16U
-  const uint8_t cmd[MCP2515_SEND_SZ] = {
+  uint8_t cmd[MCP2515_SEND_SZ] = {
    CAN_WRITE,
    TXB0CTRL,
    0x00U,
@@ -82,38 +65,26 @@ void mcp2515_send(const mcp2515_frame_t *tr) {
    tr->data[0], tr->data[1], tr->data[2], tr->data[3],
    tr->data[4], tr->data[5], tr->data[6], tr->data[7],
   };
-  mcp2515.cb.write(cmd, MCP2515_SEND_SZ);
+  transact(cmd, MCP2515_SEND_SZ);
   mcp2515_write(TXB0CTRL, (1 << TXREQ) | (1 << TXP1) | (1 << TXP0));
 }
 
-#define MCP2515_SIDH_INDEX    0U
-#define MCP2515_SIDL_INDEX    1U
-#define MCP2515_EID8_INDEX    2U
-#define MCP2515_EID0_INDEX    3U
-#define MCP2515_DLC_INDEX     4U
-#define MCP2515_DATA_INDEX    5U
-#define MCP2515_RX_BUFFER_SZ 13U
+#define MCP2515_SIDH_INDEX    1U
+#define MCP2515_SIDL_INDEX    2U
+#define MCP2515_EID8_INDEX    3U
+#define MCP2515_EID0_INDEX    4U
+#define MCP2515_DLC_INDEX     5U
+#define MCP2515_DATA_INDEX    6U
+#define MCP2515_RX_BUFFER_SZ 14U
 int8_t mcp2515_recv(mcp2515_frame_t *frame) {
   if (!(mcp2515_read(CANINTF) & (1 << RX0IF))) return -1;
-  uint8_t frame_data[MCP2515_RX_BUFFER_SZ];
-  mcp2515_read_continguous(CAN_READ_RX_BUFFER_RXB0SIDH, frame_data, MCP2515_RX_BUFFER_SZ);
-  if ((frame_data[MCP2515_SIDL_INDEX] & 0x08U) != 0U) {
-    frame->type = EXTENDED;
-
-  } else {
-    frame->type = STANDARD;
-    frame->id = (frame_data[MCP2515_SIDH_INDEX] << 3) | (frame_data[MCP2515_SIDL_INDEX] >> 5);
-  }
+  uint8_t frame_data[MCP2515_RX_BUFFER_SZ] = { 0xFFU };
+  frame_data[0] = CAN_READ_RX_BUFFER_RXB0D0;
+  (*transact)(frame_data, MCP2515_RX_BUFFER_SZ);
+  frame->id = (frame_data[MCP2515_SIDH_INDEX] << 3) | (frame_data[MCP2515_SIDL_INDEX] >> 5);
   frame->data_size = frame_data[MCP2515_DLC_INDEX] & 0x0FU;
   for (uint8_t i = 0; i < frame->data_size; ++i) {
     frame->data[i] = frame_data[MCP2515_DATA_INDEX + i];
   }
   return 0;
-}
-
-void mcp2515_config_init(const CAN_SPEED speed, const CAN_MODE  mode,
-    mcp2515_spi_callbacks_t cb) {
-  mcp2515.speed = speed;
-  mcp2515.mode  = mode;
-  mcp2515.cb = cb;
 }
