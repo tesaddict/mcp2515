@@ -75,12 +75,12 @@ void mcp2515_send(const mcp2515_frame_t *tr) {
 #define MCP2515_EID0_INDEX    4U
 #define MCP2515_DLC_INDEX     5U
 #define MCP2515_DATA_INDEX    6U
-#define MCP2515_RX_BUFFER_SZ 14U
+#define MCP2515_RX_BUFFER_SZ 15U
 int8_t mcp2515_recv(mcp2515_frame_t *frame) {
   if (!(mcp2515_read(CANINTF) & (1 << RX0IF))) return -1;
   uint8_t frame_data[MCP2515_RX_BUFFER_SZ] = { 0xFFU };
-  frame_data[0] = CAN_READ_RX_BUFFER_RXB0D0;
-  (*transact)(frame_data, MCP2515_RX_BUFFER_SZ);
+  frame_data[0] = CAN_READ_RX_BUFFER_RXB0SIDH;
+  transact(frame_data, MCP2515_RX_BUFFER_SZ);
   frame->id = (frame_data[MCP2515_SIDH_INDEX] << 3) | (frame_data[MCP2515_SIDL_INDEX] >> 5);
   frame->data_size = frame_data[MCP2515_DLC_INDEX] & 0x0FU;
   for (uint8_t i = 0; i < frame->data_size; ++i) {
