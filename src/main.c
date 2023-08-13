@@ -7,37 +7,35 @@
 
 #define MYUBRR F_CPU/16/BAUD-1
 
+#define TEST_ID 42U
+#define TEST_ARRAY_SZ 8U
+static const uint8_t TEST_ARRAY_OUT[TEST_ARRAY_SZ] = "12345678";
+static uint8_t TEST_ARRAY_IN[TEST_ARRAY_SZ] = { 0 };
+
 void usart_init(void);
 void usart_send(const char *data);
 
 int main(void) {
   logger_init(&usart_init, &usart_send, DEBUG);
   atmega328p_spi_init();
-  mcp2515_init(KBPS_125, LOOPBACK, &atmega328p_spi_transaction);
+  mcp2515_init(KBPS_125, LOOPBACK, &atmega328p_spi_write, &atmega328p_spi_read);
   logger(INFO, "PASSED: Initialization complete.\r\n");
-  mcp2515_frame_t send_frame;
-  send_frame.id = 42;
-  send_frame.data_size = 5;
-  send_frame.data[0] = 'H';
-  send_frame.data[1] = 'e';
-  send_frame.data[2] = 'l';
-  send_frame.data[3] = 'l';
-  send_frame.data[4] = 'o';
-  mcp2515_send(&send_frame);
+  mcp2515_set_id(TEST_ID);
+  mcp2515_send(TEST_ARRAY_OUT, TEST_ARRAY_SZ);
   logger(INFO, "PASSED: Standard CAN frame message has been sent.\r\n");
-  mcp2515_frame_t recv_frame;
-  int8_t ret = mcp2515_recv(&recv_frame);
-  if (ret == 0) {
+  uint8_t size = 0;
+  int32_t id = mcp2515_recv(TEST_ARRAY_IN, &size);
+  if (id != -1) {
       logger(INFO, "PASSED: Received CAN frame message.\r\n");
   } else {
       logger(INFO, "FAILED: No CAN frame message has been received.\r\n");
   }
-  if (send_frame.data[0] == recv_frame.data[0]) {
+  if (TEST_ARRAY_IN[0] == TEST_ARRAY_OUT[0]) {
     logger(INFO, "PASSED: Sent data matches received data.\r\n");
   } else {
     logger(INFO, "FAILED: Sent data does not match received data.\r\n");
   }
-  if (recv_frame.id == send_frame.id) {
+  if (id == 42) {
     logger(INFO, "PASSED: Sent id matches received id.\r\n");
   } else {
     logger(INFO, "FAILED: Sent id does not match received id.\r\n");

@@ -15,7 +15,8 @@ typedef enum {
   LOOPBACK = 2
 } CAN_MODE;
 
-typedef void (*mcp2515_spi_transaction_t) (uint8_t*, const uint8_t);
+typedef void (*mcp2515_spi_write_t) (const uint8_t*, const uint8_t);
+typedef void (*mcp2515_spi_read_t)  (uint8_t*, const uint8_t);
 
 typedef struct {
   CAN_SPEED speed;
@@ -23,17 +24,13 @@ typedef struct {
   uint8_t   interrupts;
 } mcp2515_config_t;
 
-typedef struct {
-  uint32_t id;
-  uint8_t data_size;
-  uint8_t data[8];
-} mcp2515_frame_t;
-
 void   mcp2515_init(const CAN_SPEED speed, 
                     const CAN_MODE mode, 
-                    mcp2515_spi_transaction_t tr);
-void   mcp2515_send(const mcp2515_frame_t *tr);
-int8_t mcp2515_recv(mcp2515_frame_t *frame);
+                    mcp2515_spi_write_t write,
+                    mcp2515_spi_read_t read);
+void    mcp2515_send(const uint8_t *data, const uint8_t size);
+int32_t mcp2515_recv(uint8_t *data, uint8_t *size);
+void    mcp2515_set_id(uint16_t id);
 
 // Commands
 #define CAN_RESET       0xC0U

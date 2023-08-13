@@ -9,6 +9,7 @@
 #define SS_HIGH SET_BIT(PORTB, PINB2)
 
 void atmega328p_spi_init(void);
-void atmega328p_spi_transaction(uint8_t *data, const uint8_t size);
+void atmega328p_spi_write(const uint8_t *data, const uint8_t size);
+void atmega328p_spi_read(uint8_t *data, const uint8_t size);
 
 #endif
