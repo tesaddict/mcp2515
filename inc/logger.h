@@ -12,5 +12,5 @@ typedef enum {
 
 void logger_init(void (*open) (void), void (*write) (const char*), const LOG_LEVEL level);
 void logger(const LOG_LEVEL level, const char *data);
-void byte_to_hex_string(uint8_t byte, char *dest);
+void logger_print_bytes_as_hex(const uint8_t *bytes, const uint8_t size);
 #endif
